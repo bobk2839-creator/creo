@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: omnivoice_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    # Для GPU поддержки (NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    
+    # Для CPU версии просто уберите секцию deploy выше
+    # и добавьте ограничения ресурсов при необходимости
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Опционально: Redis для кеширования и rate limiting
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: omnivoice_redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+  #   ports:
+  #     - "6379:6379"
+
+  # Опционально: PostgreSQL вместо SQLite для production
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: omnivoice_postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: omnivoice
+  #     POSTGRES_USER: omnivoice
+  #     POSTGRES_PASSWORD: your_secure_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  # redis_data:
+  # postgres_data:
