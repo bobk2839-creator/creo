@@ -42,10 +42,10 @@ class Config(BaseModel):
     # Redis (optional)
     redis_url: str = Field(default=os.getenv("REDIS_URL", ""))
     
-    @property
-    def is_admin(self, user_id: int) -> bool:
+    @staticmethod
+    def is_admin(user_id: int) -> bool:
         """Проверка, является ли пользователь админом"""
-        return user_id in self.admin_ids
+        return user_id in config.admin_ids
     
     class Config:
         arbitrary_types_allowed = True

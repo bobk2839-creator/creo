@@ -1,46 +1,76 @@
 ```
-# Dependencies
-venv/
-.venv/
+# Database files
+*.db
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Build and distribution artifacts
-build/
-dist/
-*.egg-info/
-
-# Environment files
+.Python
+env/
+venv/
+.venv/
+.ENV
 .env
+.env.*
 .env.local
-*.env.*
-
-# Logs
-*.log
-
-# Compressed archives
-*.tar.gz
-
-# Editor/IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# Coverage reports
+.env.dev
+.env.prod
+.env.test
+.env.development
+.env.production
+.env.staging
+.env.backup
+.env.example
+.env.sample
+.env.template
+.env.default
+.coverage
 coverage/
 htmlcov/
-.coverage
-
-# Python specific
-.Python
-*.so
-*.egg
-
-# OS generated files
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
 .DS_Store
 Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+.vscode/
+.idea/
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.o
+*.obj
+*.a
+*.lib
+dist/
+build/
+target/
+*.egg-info/
+.tox/
+nox/
+.pyre/
+.pytype/
+.coverage.*
+.coverage.xml
+.coverage.json
+htmlcov/
+.coverage/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+__pycache__/
+*.py[cod]
+*$py.class
+*$py.data
+**/__pycache__/
+**/*.py[cod]
+**/$py.class
+**/$py.data
 ```
