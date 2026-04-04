@@ -1,76 +1,50 @@
 ```
-# Database files
-*.db
+# Compressed files
+*.tar.gz
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
+# Dependencies
+node_modules/
 .venv/
-.ENV
-.env
-.env.*
-.env.local
-.env.dev
-.env.prod
-.env.test
-.env.development
-.env.production
-.env.staging
-.env.backup
-.env.example
-.env.sample
-.env.template
-.env.default
-.coverage
-coverage/
-htmlcov/
-.pytest_cache/
+venv/
+__pycache__/
 .mypy_cache/
-.hypothesis/
-.DS_Store
-Thumbs.db
-*.log
-*.tmp
-*.swp
-*.swo
-.vscode/
-.idea/
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
-*.o
-*.obj
-*.a
-*.lib
+.pytest_cache/
 dist/
 build/
 target/
-*.egg-info/
-.tox/
-nox/
-.pyre/
-.pytype/
-.coverage.*
-.coverage.xml
-.coverage.json
+.gradle/
+
+# Editors
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
 htmlcov/
-.coverage/
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
-__pycache__/
-*.py[cod]
-*$py.class
-*$py.data
-**/__pycache__/
-**/*.py[cod]
-**/$py.class
-**/$py.data
+.coverage
+
+# Compiled files
+*.pyc
+*.class
+*.o
+*.exe
+*.dll
+*.so
+*.a
+*.obj
+*.out
 ```
