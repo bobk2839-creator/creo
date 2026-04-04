@@ -1,0 +1,28 @@
+# Telegram Bot
+python-telegram-bot==21.0
+aiogram>=3.0.0
+
+# OmniVoice TTS
+torch>=2.8.0
+torchaudio>=2.8.0
+omnivoice
+
+# Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Payment processing
+stripe>=7.0.0
+
+# Async support
+aiohttp>=3.9.0
+
+# Utilities
+pydantic>=2.0.0
+redis>=5.0.0  # For caching and rate limiting
+
+# Admin panel (optional)
+flask>=3.0.0  # For simple admin dashboard
