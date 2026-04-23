@@ -121,26 +121,64 @@ graph TB
 - 4GB+ RAM
 - 10GB+ свободного места на диске
 
-### Установка за 5 минут
+### 🚀 Установка за 1 команду (РЕКОМЕНДУЕТСЯ)
+
+```bash
+./setup.sh
+```
+
+Этот скрипт автоматически:
+- ✅ Проверит наличие Docker и Docker Compose
+- ✅ Создаст файл `.env` с безопасными настройками
+- ✅ Запустит все сервисы
+- ✅ Дождётся готовности backend
+- ✅ Создаст демо-данные
+- ✅ Покажет информацию для входа
+
+### Альтернативные команды управления
+
+| Команда | Описание |
+|---------|----------|
+| `./start.sh` | Быстрый запуск проекта |
+| `./stop.sh` | Остановка проекта |
+| `./logs.sh` | Просмотр логов всех сервисов |
+| `./logs.sh backend` | Логи только backend |
+| `./logs.sh frontend` | Логи только frontend |
+| `./reset.sh` | Полный сброс и перезапуск (удалит все данные!) |
+
+### Ручная установка (по шагам)
 
 ```bash
 # 1. Клонируйте репозиторий
 git clone <repository-url>
 cd fuelprocess
 
-# 2. Скопируйте .env файл
+# 2. Скопируйте .env файл (если setup.sh не создан)
 cp .env.example .env
 
 # 3. Запустите все сервисы
-docker-compose up -d
+docker compose up -d
 
-# 4. Дождитесь запуска (проверьте логи)
-docker-compose logs -f backend
+# 4. Проверьте статус
+docker compose ps
 
 # 5. Откройте в браузере
 # Frontend: http://localhost:3000
 # Backend API: http://localhost:8000
 # Swagger Docs: http://localhost:8000/api/v1/docs
+```
+
+### Проверка работоспособности
+
+```bash
+# Проверка backend
+curl http://localhost:8000/health/ready
+
+# Проверка frontend
+curl http://localhost:3000
+
+# Статус всех контейнеров
+docker compose ps
 ```
 
 ### Данные для входа по умолчанию
