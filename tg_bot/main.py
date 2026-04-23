@@ -1,11 +1,13 @@
 """
-Точка входа для Telegram бота
+Точка входа для Telegram бота OmniVoice
 """
 import asyncio
 import logging
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from config.settings import config
 from database.manager import DatabaseManager
@@ -31,22 +33,26 @@ async def main():
     
     logger.info("🚀 Запуск OmniVoice Bot...")
     
+    # Создание папки temp
+    os.makedirs("temp", exist_ok=True)
+    
     # Инициализация базы данных
     db_manager = DatabaseManager(config.database_url)
     await db_manager.init_db()
     logger.info("✅ База данных инициализирована")
     
     # Предварительная загрузка модели TTS (опционально)
-    # Можно закомментировать для ленивой загрузки
     logger.info("🎤 Инициализация TTS сервиса...")
+    tts_service = None
     try:
         tts_service = get_tts_service(config.omnivoice_model, config.inference_device)
-        # tts_service.load_model()  # Раскомментировать для предзагрузки
         logger.info("✅ TTS сервис инициализирован")
     except ImportError as e:
         logger.warning(f"⚠️ TTS сервис недоступен: {e}")
         logger.warning("Бот будет работать в демо-режиме без генерации аудио")
-        tts_service = None
+    except Exception as e:
+        logger.warning(f"⚠️ Ошибка инициализации TTS: {e}")
+        logger.warning("Бот будет работать в демо-режиме без генерации аудио")
     
     # Инициализация бота
     bot = Bot(
@@ -54,27 +60,33 @@ async def main():
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     
-    # Создание диспетчера
-    dp = Dispatcher()
-    
-    # Регистрация обработчиков
-    register_handlers(dp, db_manager)
+    # Создание диспетчера с хранилищем состояний
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
     
     # Сохранение объектов в хранилище диспетчера
     dp["db_manager"] = db_manager
     dp["tts_service"] = tts_service
     
-    logger.info("✅ Обработчики зарегистрированы")
-    logger.info(f"🤖 Бот запущен! @{(await bot.get_me()).username}")
-    logger.info("💡 Для остановки нажмите Ctrl+C")
+    # Регистрация обработчиков
+    register_handlers(dp, db_manager)
     
-    # Запуск polling
+    logger.info("✅ Обработчики зарегистрированы")
+    
     try:
+        bot_info = await bot.get_me()
+        logger.info(f"🤖 Бот запущен! @{bot_info.username}")
+        logger.info("💡 Для остановки нажмите Ctrl+C")
+        
+        # Запуск polling
         await dp.start_polling(bot)
     except KeyboardInterrupt:
         logger.info("👋 Остановка бота...")
+    except Exception as e:
+        logger.error(f"❌ Ошибка: {e}")
     finally:
         await bot.session.close()
+        await storage.close()
         logger.info("✅ Бот остановлен")
 
 

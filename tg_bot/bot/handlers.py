@@ -1,7 +1,8 @@
 """
-Обработчики команд Telegram бота
+Обработчики команд Telegram бота OmniVoice
 """
 import logging
+import os
 from typing import Dict, Any
 
 from aiogram import Bot, Dispatcher, types, F
@@ -27,6 +28,7 @@ class TextGeneration(StatesGroup):
     waiting_for_text = State()
     waiting_for_ref_audio = State()
     waiting_for_ref_text = State()
+    waiting_for_voice_design = State()
     waiting_for_voice_select = State()
 
 
@@ -41,7 +43,6 @@ def create_main_keyboard(user) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help")],
     ]
     
-    # Добавить кнопку админки для админов
     if config.is_admin(user.telegram_id):
         buttons.append([InlineKeyboardButton(text="🔧 Админ-панель", callback_data="admin")])
     
@@ -75,7 +76,6 @@ async def cmd_start(message: Message, db_manager: DatabaseManager):
     """Обработчик команды /start"""
     user = message.from_user
     
-    # Регистрация пользователя в БД
     await db_manager.get_or_create_user(
         telegram_id=user.id,
         username=user.username,
@@ -97,9 +97,10 @@ async def cmd_start(message: Message, db_manager: DatabaseManager):
 Выбери действие в меню ниже 👇
     """
     
+    db_user = await db_manager.get_user(user.id)
     await message.answer(
         welcome_text,
-        reply_markup=create_main_keyboard(await db_manager.get_user(user.id)),
+        reply_markup=create_main_keyboard(db_user),
         parse_mode="Markdown"
     )
 
@@ -130,6 +131,17 @@ async def cmd_help(message: Message):
     """
     
     await message.answer(help_text, parse_mode="Markdown")
+
+
+async def cmd_cancel(message: Message, state: FSMContext, db_manager: DatabaseManager):
+    """Отмена текущего действия"""
+    await state.clear()
+    user = await db_manager.get_user(message.from_user.id)
+    
+    await message.answer(
+        "❌ Действие отменено.",
+        reply_markup=create_main_keyboard(user)
+    )
 
 
 async def callback_generate(callback: CallbackQuery, state: FSMContext):
@@ -175,53 +187,279 @@ async def callback_mode_auto(callback: CallbackQuery, state: FSMContext,
     data = await state.get_data()
     text = data.get("generation_text")
     
+    if not text:
+        await callback.message.edit_text("❌ Ошибка: текст не найден. Начните сначала.")
+        await state.clear()
+        return
+    
     await callback.message.edit_text("⏳ Генерация... Пожалуйста, подождите.")
     await callback.answer()
     
-    # Получение пользователя
     user = await db_manager.get_user(callback.from_user.id)
-    
-    # Оценка длительности
     tts_service = get_tts_service(config.omnivoice_model, config.inference_device)
-    estimated_duration = await tts_service.estimate_duration(text)
-    duration_minutes = estimated_duration / 60
     
-    # Проверка лимитов
-    can_generate, error_msg = await db_manager.can_generate(user, duration_minutes, config)
-    
-    if not can_generate:
-        await callback.message.edit_text(error_msg)
-        await state.clear()
-        return
-    
-    # Генерация аудио
-    file_path, output_duration, error = await tts_service.generate_audio(
-        text=text,
-        mode="auto"
-    )
-    
-    if error:
-        await callback.message.edit_text(error)
-        await state.clear()
-        return
-    
-    # Обновление статистики
-    user.daily_minutes_used += output_duration / 60
-    user.total_minutes_generated += output_duration / 60
-    await db_manager.update_user(user)
-    
-    # Отправка аудио
-    audio_file = FSInputFile(file_path)
-    await callback.message.answer_audio(audio_file, caption=f"⏱ Длительность: {output_duration:.2f} сек")
-    
-    # Очистка временного файла
-    tts_service.cleanup_temp_file(file_path)
+    try:
+        estimated_duration = await tts_service.estimate_duration(text)
+        duration_minutes = estimated_duration / 60
+        
+        can_generate, error_msg = await db_manager.can_generate(user, duration_minutes, config)
+        
+        if not can_generate:
+            await callback.message.edit_text(error_msg)
+            await state.clear()
+            return
+        
+        file_path, output_duration, error = await tts_service.generate_audio(
+            text=text,
+            mode="auto"
+        )
+        
+        if error:
+            await callback.message.edit_text(error)
+            await state.clear()
+            return
+        
+        user.daily_minutes_used += output_duration / 60
+        user.total_minutes_generated += output_duration / 60
+        await db_manager.update_user(user)
+        
+        audio_file = FSInputFile(file_path)
+        await callback.message.answer_audio(audio_file, caption=f"⏱ Длительность: {output_duration:.2f} сек")
+        
+        tts_service.cleanup_temp_file(file_path)
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации: {e}")
+        await callback.message.edit_text(f"❌ Произошла ошибка: {str(e)}")
     
     await state.clear()
     
-    # Возврат главного меню
+    user = await db_manager.get_user(callback.from_user.id)
     await callback.message.answer(
         "✅ Готово! Что еще хотите сделать?",
+        reply_markup=create_main_keyboard(user)
+    )
+
+
+async def callback_clone_voice(callback: CallbackQuery, state: FSMContext):
+    """Начало клонирования голоса"""
+    await state.set_state(TextGeneration.waiting_for_ref_audio)
+    
+    text = """
+👥 **Клонирование голоса**
+
+Шаг 1/3: Отправьте аудиофайл с голосом для клонирования.
+
+Требования:
+• Чистый голос без шума
+• Длительность 5-30 секунд
+• Формат: MP3, WAV, OGG
+
+Для отмены нажмите /cancel
+    """
+    
+    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.answer()
+
+
+async def handle_ref_audio(message: Message, state: FSMContext):
+    """Обработка референсного аудио"""
+    if not message.audio and not message.voice:
+        await message.answer("❌ Пожалуйста, отправьте аудиофайл или голосовое сообщение.")
+        return
+    
+    audio_file = message.audio or message.voice
+    file_id = audio_file.file_id
+    
+    file = await message.bot.get_file(file_id)
+    os.makedirs("temp", exist_ok=True)
+    file_path = f"temp/ref_{message.from_user.id}_{file.file_unique_id}.wav"
+    
+    await message.bot.download_file(file.file_path, file_path)
+    
+    await state.update_data(ref_audio_path=file_path)
+    await state.set_state(TextGeneration.waiting_for_ref_text)
+    
+    await message.answer(
+        "✅ Аудио получено!\n\n"
+        "Шаг 2/3: Отправьте текст, который был записан в этом аудио.\n"
+        "Это поможет точнее клонировать голос.\n\n"
+        "Если не знаете текст, напишите 'не знаю'."
+    )
+
+
+async def handle_ref_text(message: Message, state: FSMContext):
+    """Обработка текста референса"""
+    ref_text = message.text
+    
+    await state.update_data(ref_text=ref_text)
+    await state.set_state(TextGeneration.waiting_for_text)
+    
+    await message.answer(
+        "✅ Текст получен!\n\n"
+        "Шаг 3/3: Теперь отправьте текст, который нужно озвучить клонированным голосом.\n\n"
+        "Максимальная длина: 1000 символов."
+    )
+
+
+async def callback_mode_clone(callback: CallbackQuery, state: FSMContext, 
+                              db_manager: DatabaseManager):
+    """Генерация с клонированием голоса"""
+    data = await state.get_data()
+    text = data.get("generation_text")
+    ref_audio_path = data.get("ref_audio_path")
+    ref_text = data.get("ref_text", "")
+    
+    if not text or not ref_audio_path:
+        await callback.message.edit_text("❌ Ошибка: недостаточно данных для генерации.")
+        await state.clear()
+        return
+    
+    await callback.message.edit_text("⏳ Клонирование голоса и генерация... Пожалуйста, подождите.")
+    await callback.answer()
+    
+    user = await db_manager.get_user(callback.from_user.id)
+    tts_service = get_tts_service(config.omnivoice_model, config.inference_device)
+    
+    try:
+        estimated_duration = await tts_service.estimate_duration(text)
+        duration_minutes = estimated_duration / 60
+        
+        can_generate, error_msg = await db_manager.can_generate(user, duration_minutes, config)
+        
+        if not can_generate:
+            await callback.message.edit_text(error_msg)
+            await state.clear()
+            return
+        
+        file_path, output_duration, error = await tts_service.generate_audio(
+            text=text,
+            mode="clone",
+            ref_audio_path=ref_audio_path,
+            ref_text=ref_text
+        )
+        
+        if error:
+            await callback.message.edit_text(error)
+            await state.clear()
+            return
+        
+        user.daily_minutes_used += output_duration / 60
+        user.total_minutes_generated += output_duration / 60
+        await db_manager.update_user(user)
+        
+        audio_file = FSInputFile(file_path)
+        await callback.message.answer_audio(audio_file, caption=f"⏱ Длительность: {output_duration:.2f} сек")
+        
+        tts_service.cleanup_temp_file(file_path)
+        tts_service.cleanup_temp_file(ref_audio_path)
+        
+    except Exception as e:
+        logger.error(f"Ошибка клонирования: {e}")
+        await callback.message.edit_text(f"❌ Произошла ошибка: {str(e)}")
+    
+    await state.clear()
+    
+    user = await db_manager.get_user(callback.from_user.id)
+    await callback.message.answer(
+        "✅ Голос клонирован и аудио создано! Что еще хотите сделать?",
+        reply_markup=create_main_keyboard(user)
+    )
+
+
+async def callback_design_voice(callback: CallbackQuery, state: FSMContext):
+    """Начало дизайна голоса"""
+    await state.set_state(TextGeneration.waiting_for_voice_design)
+    
+    text = """
+🎭 **Дизайн голоса**
+
+Опишите желаемый голос своими словами.
+
+Примеры:
+• "женский, низкий тембр, британский акцент"
+• "мужской, молодой, энергичный, американский"
+• "старик, мудрый, медленная речь"
+
+Для отмены нажмите /cancel
+    """
+    
+    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.answer()
+
+
+async def handle_voice_design_text(message: Message, state: FSMContext):
+    """Обработка описания голоса"""
+    voice_design = message.text
+    
+    await state.update_data(voice_design=voice_design)
+    await state.set_state(TextGeneration.waiting_for_text)
+    
+    await message.answer(
+        f"✅ Описание голоса сохранено: \"{voice_design}\"\n\n"
+        "Теперь отправьте текст, который нужно озвучить этим голосом.\n\n"
+        "Максимальная длина: 1000 символов."
+    )
+
+
+async def callback_mode_design(callback: CallbackQuery, state: FSMContext,
+                               db_manager: DatabaseManager):
+    """Генерация с дизайном голоса"""
+    data = await state.get_data()
+    text = data.get("generation_text")
+    voice_design = data.get("voice_design")
+    
+    if not text:
+        await callback.message.edit_text("❌ Сначала отправьте текст для генерации.")
+        await state.set_state(TextGeneration.waiting_for_text)
+        return
+    
+    await callback.message.edit_text("⏳ Создание голоса по описанию и генерация... Подождите.")
+    await callback.answer()
+    
+    user = await db_manager.get_user(callback.from_user.id)
+    tts_service = get_tts_service(config.omnivoice_model, config.inference_device)
+    
+    try:
+        estimated_duration = await tts_service.estimate_duration(text)
+        duration_minutes = estimated_duration / 60
+        
+        can_generate, error_msg = await db_manager.can_generate(user, duration_minutes, config)
+        
+        if not can_generate:
+            await callback.message.edit_text(error_msg)
+            await state.clear()
+            return
+        
+        file_path, output_duration, error = await tts_service.generate_audio(
+            text=text,
+            mode="design",
+            voice_description=voice_design
+        )
+        
+        if error:
+            await callback.message.edit_text(error)
+            await state.clear()
+            return
+        
+        user.daily_minutes_used += output_duration / 60
+        user.total_minutes_generated += output_duration / 60
+        await db_manager.update_user(user)
+        
+        audio_file = FSInputFile(file_path)
+        await callback.message.answer_audio(audio_file, caption=f"⏱ Длительность: {output_duration:.2f} сек")
+        
+        tts_service.cleanup_temp_file(file_path)
+        
+    except Exception as e:
+        logger.error(f"Ошибка дизайна голоса: {e}")
+        await callback.message.edit_text(f"❌ Произошла ошибка: {str(e)}")
+    
+    await state.clear()
+    
+    user = await db_manager.get_user(callback.from_user.id)
+    await callback.message.answer(
+        "✅ Уникальный голос создан! Что еще хотите сделать?",
         reply_markup=create_main_keyboard(user)
     )
 
@@ -244,7 +482,6 @@ async def callback_balance(callback: CallbackQuery, db_manager: DatabaseManager)
         SubscriptionTier.PREMIUM: "🥇"
     }
     
-    # Форматирование даты окончания подписки
     if user.subscription_expires_at:
         expires_str = user.subscription_expires_at.strftime("%d.%m.%Y %H:%M")
     else:
@@ -297,22 +534,50 @@ async def callback_history(callback: CallbackQuery, db_manager: DatabaseManager)
     await callback.answer()
 
 
+async def callback_back_to_main(callback: CallbackQuery, db_manager: DatabaseManager):
+    """Возврат в главное меню"""
+    user = await db_manager.get_user(callback.from_user.id)
+    
+    await callback.message.edit_text(
+        "🏠 Главное меню",
+        reply_markup=create_main_keyboard(user)
+    )
+    await callback.answer()
+
+
 def register_handlers(dp: Dispatcher, db_manager: DatabaseManager):
     """Регистрация всех обработчиков"""
     
+    dp["db_manager"] = db_manager
+    
     # Команды
     dp.message.register(lambda msg: cmd_start(msg, db_manager), CommandStart())
-    dp.message.register(cmd_help, Command("help"))
+    dp.message.register(lambda msg: cmd_help(msg), Command("help"))
+    dp.message.register(lambda msg: cmd_cancel(msg, FSMContext(), db_manager), Command("cancel"))
     
     # Генерация текста
     dp.callback_query.register(lambda cb: callback_generate(cb, FSMContext()), F.data == "generate")
     dp.message.register(lambda msg, state: handle_text_for_generation(msg, state, db_manager), TextGeneration.waiting_for_text)
     
+    # Клонирование голоса
+    dp.callback_query.register(lambda cb: callback_clone_voice(cb, FSMContext()), F.data == "clone_voice")
+    dp.message.register(lambda msg, state: handle_ref_audio(msg, state), TextGeneration.waiting_for_ref_audio)
+    dp.message.register(lambda msg, state: handle_ref_text(msg, state), TextGeneration.waiting_for_ref_text)
+    
+    # Дизайн голоса
+    dp.callback_query.register(lambda cb: callback_design_voice(cb, FSMContext()), F.data == "design_voice")
+    dp.message.register(lambda msg, state: handle_voice_design_text(msg, state), TextGeneration.waiting_for_voice_design)
+    
     # Режимы генерации
     dp.callback_query.register(lambda cb, state: callback_mode_auto(cb, state, db_manager), F.data == "mode_auto")
+    dp.callback_query.register(lambda cb, state: callback_mode_clone(cb, state, db_manager), F.data == "mode_clone")
+    dp.callback_query.register(lambda cb, state: callback_mode_design(cb, state, db_manager), F.data == "mode_design")
     
     # Баланс и подписка
     dp.callback_query.register(lambda cb: callback_balance(cb, db_manager), F.data == "balance")
     
     # История
     dp.callback_query.register(lambda cb: callback_history(cb, db_manager), F.data == "history")
+    
+    # Навигация
+    dp.callback_query.register(lambda cb: callback_back_to_main(cb, db_manager), F.data == "back_to_main")

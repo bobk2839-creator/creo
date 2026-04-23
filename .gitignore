@@ -1,46 +1,64 @@
 ```
-# Dependencies
-venv/
-.venv/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Build and distribution artifacts
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
-
-# Environment files
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+.venv/
 .env
 .env.local
-*.env.*
+.env.*
+.envrc
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Alembic
+alembic/versions/
 
 # Logs
 *.log
+logs/
+*.out
 
-# Compressed archives
-*.tar.gz
+# Environment variables
+.env
+.env.local
+.env.*
 
-# Editor/IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# Python specific
-.Python
-*.so
-*.egg
-
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
 ```
